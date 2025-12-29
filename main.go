@@ -17,17 +17,47 @@ const (
 	MaxFrames  = 432000
 	TotalDeck  = 52
 	MaxHand    = 11
+	Blackjack  = 21
 )
 
 type GameState struct {
-	JustStarted   bool
-	IsOver        bool
-	YourHandValue int
-	HerHandValue  int
+	JustStarted bool
+	IsOver      bool
 }
 
 func newGame() *GameState {
 	return &GameState{JustStarted: true}
+}
+
+type Player struct {
+	Hand      [MaxHand]*CardInHand
+	Score     int
+	IsDealer  bool
+	IsBust    bool
+	HasStayed bool
+}
+
+func newPlayer(hand [MaxHand]*CardInHand, isDealer bool) *Player {
+	return &Player{Hand: hand, IsDealer: isDealer}
+}
+
+func calculateScore(player *Player) {
+	theScore := 0
+	numberOfAces := 0
+	for i := 0; i < MaxHand; i++ {
+		theScore += player.Hand[i].Value
+		if player.Hand[i].Value > 10 {
+			numberOfAces++
+		}
+	}
+	if numberOfAces > 0 {
+		for i := 0; i < numberOfAces; i++ {
+			if theScore > Blackjack {
+				theScore = theScore - 10
+			}
+		}
+	}
+	player.Score = theScore
 }
 
 type Card struct {
@@ -95,39 +125,44 @@ func loadCardTexture(typeOfCard string, c int, cardTextures [TotalDeck]rl.Textur
 }
 
 func getInput(yourGame *GameState) {
-	if yourGame.IsOver == false {
-
+	if yourGame.IsOver == false && yourGame.JustStarted == false {
+		if rl.IsKeyDown(rl.KeyX) {
+			hit()
+		}
 	}
 }
 
-func update(cardDeck [TotalDeck]*Card, yourHand, herHand [MaxHand]*CardInHand, yourGame *GameState) ([MaxHand]*CardInHand, [MaxHand]*CardInHand) {
+func hit() {
+
+}
+
+func update(cardDeck [TotalDeck]*Card, player1, dealer *Player, yourGame *GameState) {
 	if yourGame.JustStarted {
 		rand.Shuffle(TotalDeck, func(i, j int) {
 			cardDeck[i], cardDeck[j] = cardDeck[j], cardDeck[i]
 		})
 		//giving first card
-		yourHand[0] = AddCardToHand(cardDeck[0])
-		yourHand[0].ToShow = true
+		player1.Hand[0] = AddCardToHand(cardDeck[0])
+		player1.Hand[0].ToShow = true
 		cardDeck[0].IsDiscarded = true
 		//giving second card
-		yourHand[1] = AddCardToHand(cardDeck[1])
-		yourHand[1].ToShow = true
+		player1.Hand[1] = AddCardToHand(cardDeck[1])
+		player1.Hand[1].ToShow = true
 		cardDeck[1].IsDiscarded = true
 		//giving first card to dealer
-		herHand[0] = AddCardToHand(cardDeck[2])
-		herHand[0].ToShow = true
-		herHand[0].X = WindowSize - 5 - herHand[0].Width
-		herHand[0].Y = 50
+		dealer.Hand[0] = AddCardToHand(cardDeck[2])
+		dealer.Hand[0].ToShow = true
+		dealer.Hand[0].X = WindowSize - 5 - dealer.Hand[0].Width
+		dealer.Hand[0].Y = 50
 		cardDeck[2].IsDiscarded = true
 		//giving second card to dealer
-		herHand[1] = AddCardToHand(cardDeck[3])
-		herHand[1].ToShow = true
-		herHand[1].X = WindowSize - 5 - herHand[1].Width
-		herHand[1].Y = 50
+		dealer.Hand[1] = AddCardToHand(cardDeck[3])
+		dealer.Hand[1].ToShow = true
+		dealer.Hand[1].X = WindowSize - 5 - dealer.Hand[1].Width
+		dealer.Hand[1].Y = 50
 		cardDeck[3].IsDiscarded = true
 		yourGame.JustStarted = false
 	}
-	return yourHand, herHand
 }
 
 func draw(background, backOfCard rl.Texture2D, yourHand, herHand [MaxHand]*CardInHand, yourGame *GameState) {
@@ -139,33 +174,24 @@ func draw(background, backOfCard rl.Texture2D, yourHand, herHand [MaxHand]*CardI
 	if yourGame.IsOver {
 		rl.DrawText("Game is over", 190, 200, 20, rl.Red)
 	}
-	var offset int32
-	offset = 0
-	isFirst := true
+	offset := int32(0)
 	for _, card := range yourHand {
 		if card != nil && card.ToShow == true {
-			if isFirst {
-				yourGame.YourHandValue = card.Value
-			} else {
-				yourGame.YourHandValue = yourGame.YourHandValue + card.Value
-			}
 			rl.DrawTexture(card.Texture, int32(card.X)+offset, int32(card.Y), rl.White)
 			offset = offset + 30
 		}
 	}
 	offset = 0
-	isFirst = true
+	isFirst := true
 	for _, card := range herHand {
 		if card != nil && card.ToShow == true {
 			if isFirst {
 				rl.DrawTexture(backOfCard, int32(card.X), int32(card.Y), rl.White)
-				yourGame.HerHandValue = card.Value
 				offset = offset + 40
 				isFirst = false
 			} else {
 				rl.DrawTexture(card.Texture, int32(card.X), int32(card.Y)+offset, rl.White)
 				offset = offset + 40
-				yourGame.HerHandValue = yourGame.HerHandValue + card.Value
 			}
 		}
 	}
@@ -183,17 +209,21 @@ func main() {
 	defer rl.UnloadTexture(background)
 	backOfCard := rl.LoadTexture("images/Backface_Red.png")
 	defer rl.UnloadTexture(backOfCard)
+	//importing cards
 	cardTextures, cardDeck := importCards()
-	var yourHand [MaxHand]*CardInHand
-	var herHand [MaxHand]*CardInHand
 	for _, texture := range cardTextures {
 		defer rl.UnloadTexture(texture)
 	}
+	//setting up hands and players
+	var yourHand [MaxHand]*CardInHand
+	var herHand [MaxHand]*CardInHand
+	player1 := newPlayer(yourHand, false)
+	dealer := newPlayer(herHand, true)
 	frames := 0
 	for !rl.WindowShouldClose() && frames < MaxFrames {
 		getInput(yourGame)
-		yourHand, herHand = update(cardDeck, yourHand, herHand, yourGame)
-		draw(background, backOfCard, yourHand, herHand, yourGame)
+		update(cardDeck, player1, dealer, yourGame)
+		draw(background, backOfCard, player1.Hand, dealer.Hand, yourGame)
 		frames++
 	}
 }
