@@ -5,6 +5,7 @@
 package main
 
 import (
+	"fmt"
 	"math/rand"
 	"strconv"
 
@@ -45,9 +46,13 @@ func calculateScore(player *Player) {
 	theScore := 0
 	numberOfAces := 0
 	for i := 0; i < MaxHand; i++ {
-		theScore += player.Hand[i].Value
-		if player.Hand[i].Value > 10 {
-			numberOfAces++
+		if player.Hand[i] == nil {
+			break
+		} else {
+			theScore += player.Hand[i].Value
+			if player.Hand[i].Value > 10 {
+				numberOfAces++
+			}
 		}
 	}
 	if numberOfAces > 0 {
@@ -57,6 +62,7 @@ func calculateScore(player *Player) {
 			}
 		}
 	}
+	fmt.Println(theScore)
 	player.Score = theScore
 }
 
@@ -112,11 +118,11 @@ func loadCardTexture(typeOfCard string, c int, cardTextures [TotalDeck]rl.Textur
 		//second switch for the deck
 		switch i {
 		case 11, 12, 13:
-			cardDeck[c] = newCard(cardTextures[c], Center, WindowSize-200, 10)
+			cardDeck[c] = newCard(cardTextures[c], Center-200, WindowSize-200, 10)
 		case 14:
-			cardDeck[c] = newCard(cardTextures[c], Center, WindowSize-200, 11)
+			cardDeck[c] = newCard(cardTextures[c], Center-200, WindowSize-200, 11)
 		default:
-			cardDeck[c] = newCard(cardTextures[c], Center, WindowSize-200, i)
+			cardDeck[c] = newCard(cardTextures[c], Center-200, WindowSize-200, i)
 		}
 		//ha ha ha no, this is not a programming pun. c refers to card count therefore c++
 		c++
@@ -161,11 +167,14 @@ func update(cardDeck [TotalDeck]*Card, player1, dealer *Player, yourGame *GameSt
 		dealer.Hand[1].X = WindowSize - 5 - dealer.Hand[1].Width
 		dealer.Hand[1].Y = 50
 		cardDeck[3].IsDiscarded = true
+		//update Score
+		calculateScore(player1)
+		calculateScore(dealer)
 		yourGame.JustStarted = false
 	}
 }
 
-func draw(background, backOfCard rl.Texture2D, yourHand, herHand [MaxHand]*CardInHand, yourGame *GameState) {
+func draw(background, backOfCard rl.Texture2D, player1, dealer *Player, yourGame *GameState) {
 	rl.BeginDrawing()
 
 	rl.ClearBackground(rl.RayWhite)
@@ -173,29 +182,38 @@ func draw(background, backOfCard rl.Texture2D, yourHand, herHand [MaxHand]*CardI
 	rl.DrawTexture(background, 0, 0, rl.White)
 	if yourGame.IsOver {
 		rl.DrawText("Game is over", 190, 200, 20, rl.Red)
-	}
-	offset := int32(0)
-	for _, card := range yourHand {
-		if card != nil && card.ToShow == true {
-			rl.DrawTexture(card.Texture, int32(card.X)+offset, int32(card.Y), rl.White)
-			offset = offset + 30
-		}
-	}
-	offset = 0
-	isFirst := true
-	for _, card := range herHand {
-		if card != nil && card.ToShow == true {
-			if isFirst {
-				rl.DrawTexture(backOfCard, int32(card.X), int32(card.Y), rl.White)
-				offset = offset + 40
-				isFirst = false
+	} else {
+		offset := int32(0)
+		for i := 0; i < MaxHand; i++ {
+			if player1.Hand[i] == nil {
+				break
 			} else {
-				rl.DrawTexture(card.Texture, int32(card.X), int32(card.Y)+offset, rl.White)
-				offset = offset + 40
+				if player1.Hand[i] != nil && player1.Hand[i].ToShow == true {
+					rl.DrawTexture(player1.Hand[i].Texture, int32(player1.Hand[i].X)+offset, int32(player1.Hand[i].Y), rl.White)
+					offset = offset + 30
+				}
+			}
+		}
+		rl.DrawText("Score: "+strconv.Itoa(player1.Score), 10, WindowSize-50, 20, rl.RayWhite)
+		offset = 0
+		isFirst := true
+		for i := 0; i < MaxHand; i++ {
+			if dealer.Hand[i] == nil {
+				break
+			} else {
+				if dealer.Hand[i] != nil && dealer.Hand[i].ToShow == true {
+					if isFirst {
+						rl.DrawTexture(backOfCard, int32(dealer.Hand[i].X), int32(dealer.Hand[i].Y), rl.White)
+						offset = offset + 40
+						isFirst = false
+					} else {
+						rl.DrawTexture(dealer.Hand[i].Texture, int32(dealer.Hand[i].X), int32(dealer.Hand[i].Y)+offset, rl.White)
+						offset = offset + 40
+					}
+				}
 			}
 		}
 	}
-
 	rl.EndDrawing()
 }
 
@@ -223,7 +241,7 @@ func main() {
 	for !rl.WindowShouldClose() && frames < MaxFrames {
 		getInput(yourGame)
 		update(cardDeck, player1, dealer, yourGame)
-		draw(background, backOfCard, player1.Hand, dealer.Hand, yourGame)
+		draw(background, backOfCard, player1, dealer, yourGame)
 		frames++
 	}
 }
