@@ -24,10 +24,11 @@ const (
 type GameState struct {
 	JustStarted bool
 	IsOver      bool
+	Lives       int
 }
 
 func newGame() *GameState {
-	return &GameState{JustStarted: true}
+	return &GameState{JustStarted: true, Lives: 3}
 }
 
 type Player struct {
@@ -50,7 +51,7 @@ func calculateScore(player *Player) {
 			break
 		} else {
 			theScore += player.Hand[i].Value
-			if player.Hand[i].Value > 10 {
+			if player.Hand[i].Value == 11 {
 				numberOfAces++
 			}
 		}
@@ -130,47 +131,72 @@ func loadCardTexture(typeOfCard string, c int, cardTextures [TotalDeck]rl.Textur
 	return cardTextures, cardDeck, c
 }
 
-func getInput(yourGame *GameState) {
+func getInput(player1 *Player, cardDeck [TotalDeck]*Card, yourGame *GameState) {
 	if yourGame.IsOver == false && yourGame.JustStarted == false {
-		if rl.IsKeyDown(rl.KeyX) {
-			hit()
+		if rl.IsKeyPressed(rl.KeyX) {
+			hit(player1, cardDeck)
 		}
 	}
 }
 
-func hit() {
-
+func hit(player *Player, cardDeck [TotalDeck]*Card) {
+	var newCardi int
+	//first find the empty slot
+	for i := 0; i < MaxHand; i++ {
+		if player.Hand[i] == nil {
+			newCardi = i
+			break
+		}
+	}
+	//now we grab a new card
+	for i := 0; i < TotalDeck; i++ {
+		if cardDeck[i].IsDiscarded == false {
+			player.Hand[newCardi] = AddCardToHand(cardDeck[i])
+			player.Hand[newCardi].ToShow = true
+			cardDeck[i].IsDiscarded = true
+			break
+		}
+	}
+	calculateScore(player)
 }
 
 func update(cardDeck [TotalDeck]*Card, player1, dealer *Player, yourGame *GameState) {
-	if yourGame.JustStarted {
-		rand.Shuffle(TotalDeck, func(i, j int) {
-			cardDeck[i], cardDeck[j] = cardDeck[j], cardDeck[i]
-		})
-		//giving first card
-		player1.Hand[0] = AddCardToHand(cardDeck[0])
-		player1.Hand[0].ToShow = true
-		cardDeck[0].IsDiscarded = true
-		//giving second card
-		player1.Hand[1] = AddCardToHand(cardDeck[1])
-		player1.Hand[1].ToShow = true
-		cardDeck[1].IsDiscarded = true
-		//giving first card to dealer
-		dealer.Hand[0] = AddCardToHand(cardDeck[2])
-		dealer.Hand[0].ToShow = true
-		dealer.Hand[0].X = WindowSize - 5 - dealer.Hand[0].Width
-		dealer.Hand[0].Y = 50
-		cardDeck[2].IsDiscarded = true
-		//giving second card to dealer
-		dealer.Hand[1] = AddCardToHand(cardDeck[3])
-		dealer.Hand[1].ToShow = true
-		dealer.Hand[1].X = WindowSize - 5 - dealer.Hand[1].Width
-		dealer.Hand[1].Y = 50
-		cardDeck[3].IsDiscarded = true
-		//update Score
-		calculateScore(player1)
-		calculateScore(dealer)
-		yourGame.JustStarted = false
+	if yourGame.IsOver == false {
+		if yourGame.JustStarted {
+			rand.Shuffle(TotalDeck, func(i, j int) {
+				cardDeck[i], cardDeck[j] = cardDeck[j], cardDeck[i]
+			})
+			//giving first card
+			player1.Hand[0] = AddCardToHand(cardDeck[0])
+			player1.Hand[0].ToShow = true
+			cardDeck[0].IsDiscarded = true
+			//giving second card
+			player1.Hand[1] = AddCardToHand(cardDeck[1])
+			player1.Hand[1].ToShow = true
+			cardDeck[1].IsDiscarded = true
+			//giving first card to dealer
+			dealer.Hand[0] = AddCardToHand(cardDeck[2])
+			dealer.Hand[0].ToShow = true
+			dealer.Hand[0].X = WindowSize - 5 - dealer.Hand[0].Width
+			dealer.Hand[0].Y = 50
+			cardDeck[2].IsDiscarded = true
+			//giving second card to dealer
+			dealer.Hand[1] = AddCardToHand(cardDeck[3])
+			dealer.Hand[1].ToShow = true
+			dealer.Hand[1].X = WindowSize - 5 - dealer.Hand[1].Width
+			dealer.Hand[1].Y = 50
+			cardDeck[3].IsDiscarded = true
+			//update Score
+			calculateScore(player1)
+			calculateScore(dealer)
+			yourGame.JustStarted = false
+		}
+		if player1.Score > Blackjack {
+			yourGame.Lives -= 1
+		}
+		if yourGame.Lives <= 0 {
+			yourGame.IsOver = true
+		}
 	}
 }
 
@@ -239,7 +265,7 @@ func main() {
 	dealer := newPlayer(herHand, true)
 	frames := 0
 	for !rl.WindowShouldClose() && frames < MaxFrames {
-		getInput(yourGame)
+		getInput(player1, cardDeck, yourGame)
 		update(cardDeck, player1, dealer, yourGame)
 		draw(background, backOfCard, player1, dealer, yourGame)
 		frames++
