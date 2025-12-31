@@ -1,11 +1,10 @@
 //Author: Design-BAB
-//Date: 12/25/2025
+//Date: 12/31/2025
 //Description: Time to play Blackjack! The goal is to reach 452 lines of code
 
 package main
 
 import (
-	"fmt"
 	"math/rand"
 	"strconv"
 
@@ -26,6 +25,8 @@ type GameState struct {
 	IsOver      bool
 	Lives       int
 	TurnIsNow   bool
+	RoundIsOver bool
+	YouWon      bool
 }
 
 func newGame() *GameState {
@@ -47,7 +48,7 @@ func newPlayer(hand [MaxHand]*CardInHand, isDealer bool) *Player {
 func calculateScore(player *Player) {
 	theScore := 0
 	numberOfAces := 0
-	for i := 0; i < MaxHand; i++ {
+	for i := range MaxHand {
 		if player.Hand[i] == nil {
 			break
 		} else {
@@ -64,7 +65,6 @@ func calculateScore(player *Player) {
 			}
 		}
 	}
-	fmt.Println(theScore)
 	player.Score = theScore
 }
 
@@ -132,11 +132,14 @@ func loadCardTexture(typeOfCard string, c int, cardTextures [TotalDeck]rl.Textur
 	return cardTextures, cardDeck, c
 }
 
-func getInput(player1 *Player, cardDeck [TotalDeck]*Card, yourGame *GameState) {
+func getInput(player1, dealer *Player, cardDeck [TotalDeck]*Card, yourGame *GameState) {
 	if yourGame.IsOver == false && yourGame.JustStarted == false && yourGame.TurnIsNow {
 		if rl.IsKeyPressed(rl.KeyX) {
 			hit(player1, cardDeck)
 			//yourGame.TurnIsNow = false
+		}
+		if rl.IsKeyPressed(rl.KeyZ) {
+			stay(dealer, cardDeck, yourGame)
 		}
 	}
 }
@@ -144,14 +147,14 @@ func getInput(player1 *Player, cardDeck [TotalDeck]*Card, yourGame *GameState) {
 func hit(player *Player, cardDeck [TotalDeck]*Card) {
 	var newCardi int
 	//first find the empty slot
-	for i := 0; i < MaxHand; i++ {
+	for i := range MaxHand {
 		if player.Hand[i] == nil {
 			newCardi = i
 			break
 		}
 	}
 	//now we grab a new card
-	for i := 0; i < TotalDeck; i++ {
+	for i := range TotalDeck {
 		if cardDeck[i].IsDiscarded == false {
 			player.Hand[newCardi] = AddCardToHand(cardDeck[i])
 			player.Hand[newCardi].ToShow = true
@@ -164,6 +167,18 @@ func hit(player *Player, cardDeck [TotalDeck]*Card) {
 		}
 	}
 	calculateScore(player)
+}
+
+func stay(dealer *Player, cardDeck [TotalDeck]*Card, yourGame *GameState) {
+	yourGame.TurnIsNow = false
+	for i := 0; i < MaxHand; i++ {
+		if dealer.Score < 17 {
+			hit(dealer, cardDeck)
+		} else {
+			break
+		}
+	}
+	yourGame.RoundIsOver = true
 }
 
 func update(cardDeck [TotalDeck]*Card, player1, dealer *Player, yourGame *GameState) {
@@ -186,20 +201,39 @@ func update(cardDeck [TotalDeck]*Card, player1, dealer *Player, yourGame *GameSt
 		}
 		if player1.Score > Blackjack {
 			yourGame.Lives -= 1
-			for i := 0; i < MaxHand; i++ {
-				if player1.Hand[i] != nil {
-					player1.Hand[i] = nil
-				}
-				if dealer.Hand[i] != nil {
-					dealer.Hand[i] = nil
-				}
-			}
-			yourGame.JustStarted = true
-
+			resetRound(player1, dealer, yourGame)
+		}
+		if yourGame.TurnIsNow == false && yourGame.RoundIsOver {
+			checkWinConditions(player1, dealer, yourGame)
 		}
 		if yourGame.Lives <= 0 {
 			yourGame.IsOver = true
 		}
+	}
+}
+
+func resetRound(player1, dealer *Player, yourGame *GameState) {
+	for i := range MaxHand {
+		if player1.Hand[i] != nil {
+			player1.Hand[i] = nil
+		}
+		if dealer.Hand[i] != nil {
+			dealer.Hand[i] = nil
+		}
+	}
+	yourGame.JustStarted = true
+	yourGame.TurnIsNow = true
+}
+
+func checkWinConditions(player1, dealer *Player, yourGame *GameState) {
+	if player1.Score == Blackjack && dealer.Score != Blackjack {
+		yourGame.YouWon = true
+	} else if dealer.Score == Blackjack {
+		rl.DrawText("The house won.", 190, 200, 20, rl.Green)
+	}
+	if yourGame.YouWon == true {
+		rl.DrawText("You won!", 190, 200, 40, rl.Green)
+		resetRound(player1, dealer, yourGame)
 	}
 }
 
@@ -213,7 +247,7 @@ func draw(background, backOfCard rl.Texture2D, player1, dealer *Player, yourGame
 		rl.DrawText("Game is over", 190, 200, 20, rl.Red)
 	} else {
 		offset := int32(0)
-		for i := 0; i < MaxHand; i++ {
+		for i := range MaxHand {
 			if player1.Hand[i] == nil {
 				break
 			} else {
@@ -226,7 +260,7 @@ func draw(background, backOfCard rl.Texture2D, player1, dealer *Player, yourGame
 		rl.DrawText("Score: "+strconv.Itoa(player1.Score), 10, WindowSize-50, 20, rl.RayWhite)
 		offset = 0
 		isFirst := true
-		for i := 0; i < MaxHand; i++ {
+		for i := range MaxHand {
 			if dealer.Hand[i] == nil {
 				break
 			} else {
@@ -268,7 +302,7 @@ func main() {
 	dealer := newPlayer(herHand, true)
 	frames := 0
 	for !rl.WindowShouldClose() && frames < MaxFrames {
-		getInput(player1, cardDeck, yourGame)
+		getInput(player1, dealer, cardDeck, yourGame)
 		update(cardDeck, player1, dealer, yourGame)
 		draw(background, backOfCard, player1, dealer, yourGame)
 		frames++
