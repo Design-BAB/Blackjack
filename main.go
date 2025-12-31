@@ -25,6 +25,7 @@ type GameState struct {
 	JustStarted bool
 	IsOver      bool
 	Lives       int
+	TurnIsNow   bool
 }
 
 func newGame() *GameState {
@@ -132,9 +133,10 @@ func loadCardTexture(typeOfCard string, c int, cardTextures [TotalDeck]rl.Textur
 }
 
 func getInput(player1 *Player, cardDeck [TotalDeck]*Card, yourGame *GameState) {
-	if yourGame.IsOver == false && yourGame.JustStarted == false {
+	if yourGame.IsOver == false && yourGame.JustStarted == false && yourGame.TurnIsNow {
 		if rl.IsKeyPressed(rl.KeyX) {
 			hit(player1, cardDeck)
+			//yourGame.TurnIsNow = false
 		}
 	}
 }
@@ -154,6 +156,10 @@ func hit(player *Player, cardDeck [TotalDeck]*Card) {
 			player.Hand[newCardi] = AddCardToHand(cardDeck[i])
 			player.Hand[newCardi].ToShow = true
 			cardDeck[i].IsDiscarded = true
+			if player.IsDealer {
+				player.Hand[newCardi].X = WindowSize - 5 - player.Hand[newCardi].Width
+				player.Hand[newCardi].Y = 50
+			}
 			break
 		}
 	}
@@ -166,33 +172,30 @@ func update(cardDeck [TotalDeck]*Card, player1, dealer *Player, yourGame *GameSt
 			rand.Shuffle(TotalDeck, func(i, j int) {
 				cardDeck[i], cardDeck[j] = cardDeck[j], cardDeck[i]
 			})
-			//giving first card
-			player1.Hand[0] = AddCardToHand(cardDeck[0])
-			player1.Hand[0].ToShow = true
-			cardDeck[0].IsDiscarded = true
-			//giving second card
-			player1.Hand[1] = AddCardToHand(cardDeck[1])
-			player1.Hand[1].ToShow = true
-			cardDeck[1].IsDiscarded = true
-			//giving first card to dealer
-			dealer.Hand[0] = AddCardToHand(cardDeck[2])
-			dealer.Hand[0].ToShow = true
-			dealer.Hand[0].X = WindowSize - 5 - dealer.Hand[0].Width
-			dealer.Hand[0].Y = 50
-			cardDeck[2].IsDiscarded = true
-			//giving second card to dealer
-			dealer.Hand[1] = AddCardToHand(cardDeck[3])
-			dealer.Hand[1].ToShow = true
-			dealer.Hand[1].X = WindowSize - 5 - dealer.Hand[1].Width
-			dealer.Hand[1].Y = 50
-			cardDeck[3].IsDiscarded = true
+			//giving first card and second card
+			hit(player1, cardDeck)
+			hit(player1, cardDeck)
+			//giving first & second card to dealer
+			hit(dealer, cardDeck)
+			hit(dealer, cardDeck)
 			//update Score
 			calculateScore(player1)
 			calculateScore(dealer)
 			yourGame.JustStarted = false
+			yourGame.TurnIsNow = true
 		}
 		if player1.Score > Blackjack {
 			yourGame.Lives -= 1
+			for i := 0; i < MaxHand; i++ {
+				if player1.Hand[i] != nil {
+					player1.Hand[i] = nil
+				}
+				if dealer.Hand[i] != nil {
+					dealer.Hand[i] = nil
+				}
+			}
+			yourGame.JustStarted = true
+
 		}
 		if yourGame.Lives <= 0 {
 			yourGame.IsOver = true
