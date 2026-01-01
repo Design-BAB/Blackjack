@@ -7,6 +7,7 @@ package main
 import (
 	"math/rand"
 	"strconv"
+	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -27,10 +28,12 @@ type GameState struct {
 	TurnIsNow   bool
 	RoundIsOver bool
 	YouWon      bool
+	Scheduler   time.Time
 }
 
 func newGame() *GameState {
-	return &GameState{JustStarted: true, Lives: 3}
+	startTimeNow := time.Now()
+	return &GameState{JustStarted: true, Lives: 3, Scheduler: startTimeNow}
 }
 
 type Player struct {
@@ -136,7 +139,6 @@ func getInput(player1, dealer *Player, cardDeck [TotalDeck]*Card, yourGame *Game
 	if yourGame.IsOver == false && yourGame.JustStarted == false && yourGame.TurnIsNow {
 		if rl.IsKeyPressed(rl.KeyX) {
 			hit(player1, cardDeck)
-			//yourGame.TurnIsNow = false
 		}
 		if rl.IsKeyPressed(rl.KeyZ) {
 			stay(dealer, cardDeck, yourGame)
@@ -161,7 +163,7 @@ func hit(player *Player, cardDeck [TotalDeck]*Card) {
 			cardDeck[i].IsDiscarded = true
 			if player.IsDealer {
 				player.Hand[newCardi].X = WindowSize - 5 - player.Hand[newCardi].Width
-				player.Hand[newCardi].Y = 50
+				player.Hand[newCardi].Y = 75
 			}
 			break
 		}
@@ -230,11 +232,14 @@ func checkWinConditions(player1, dealer *Player, yourGame *GameState) {
 		yourGame.YouWon = true
 	} else if dealer.Score == Blackjack {
 		rl.DrawText("The house won.", 190, 200, 20, rl.Green)
+	} else if dealer.Score > Blackjack && player1.Score < Blackjack {
+		yourGame.YouWon = true
+	} else if dealer.Score < player1.Score && dealer.Score < Blackjack && player1.Score < Blackjack {
+		yourGame.YouWon = true
 	}
-	if yourGame.YouWon == true {
-		rl.DrawText("You won!", 190, 200, 40, rl.Green)
-		resetRound(player1, dealer, yourGame)
-	}
+	resetRound(player1, dealer, yourGame)
+	startTimeNow := time.Now()
+	yourGame.Scheduler = startTimeNow
 }
 
 func draw(background, backOfCard rl.Texture2D, player1, dealer *Player, yourGame *GameState) {
@@ -274,6 +279,20 @@ func draw(background, backOfCard rl.Texture2D, player1, dealer *Player, yourGame
 						offset = offset + 40
 					}
 				}
+			}
+		}
+		if yourGame.RoundIsOver {
+			rl.DrawText(strconv.Itoa(dealer.Score), WindowSize-100, 5, 20, rl.RayWhite)
+			if time.Since(yourGame.Scheduler) < 3*time.Second {
+				if yourGame.YouWon {
+					rl.DrawText("You won!", 190, 200, 40, rl.Green)
+				} else {
+					rl.DrawText("You lost", 190, 200, 40, rl.Red)
+				}
+			} else {
+				yourGame.YouWon = false
+				yourGame.RoundIsOver = false
+				yourGame.TurnIsNow = true
 			}
 		}
 	}
