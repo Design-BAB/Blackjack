@@ -55,4 +55,4 @@ Separate drawing functions for cards, UI, and game messages
 
 📸 Screenshots
 
-(Add gameplay screenshots or a short GIF here — highly recommended for portfo
+(to be added)
