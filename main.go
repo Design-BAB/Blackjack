@@ -1,5 +1,5 @@
 //Author: Design-BAB
-//Date: 1/1/2025
+//Date: 1/2/2025
 //Description: Time to play Blackjack! The goal is to reach 452 lines of code
 
 package main
@@ -13,35 +13,39 @@ import (
 )
 
 const (
-	WindowSize = 800
-	Center     = WindowSize / 2
-	MaxFrames  = 432000
-	TotalDeck  = 52
-	MaxHand    = 11
-	Blackjack  = 21
+	WindowSize        = 800
+	Center            = WindowSize / 2
+	PlayerCardXPos    = 175
+	PlayerCardYPos    = WindowSize - 200
+	MaxFrames         = 432000
+	TotalDeck         = 52
+	MaxHand           = 11
+	Blackjack         = 21
+	TimeToPassOutCard = 450 * time.Millisecond
 )
 
 type GameState struct {
-	JustStarted bool
-	IsOver      bool
-	Lives       int
-	TurnIsNow   bool
-	RoundIsOver bool
-	YouWon      bool
-	Scheduler   time.Time
+	JustStarted        bool
+	IsOver             bool
+	Lives              int
+	TurnIsNow          bool
+	RoundIsOver        bool
+	YouWon             bool
+	DealerGettingCards bool
+	Scheduler          time.Time
+	LastCardTime       time.Time
 }
 
 func newGame() *GameState {
 	startTimeNow := time.Now()
-	return &GameState{JustStarted: true, Lives: 3, Scheduler: startTimeNow}
+	return &GameState{JustStarted: true, Lives: 3, Scheduler: startTimeNow, LastCardTime: startTimeNow}
 }
 
 type Player struct {
-	Hand      [MaxHand]*CardInHand
-	Score     int
-	IsDealer  bool
-	IsBust    bool
-	HasStayed bool
+	Hand     [MaxHand]*CardInHand
+	Score    int
+	IsDealer bool
+	IsBust   bool
 }
 
 func newPlayer(hand [MaxHand]*CardInHand, isDealer bool) *Player {
@@ -126,11 +130,11 @@ func loadCardTexture(typeOfCard string, c int, cardTextures [TotalDeck]rl.Textur
 		//second switch for the deck struct
 		switch i {
 		case 11, 12, 13:
-			cardDeck[c] = newCard(cardTextures[c], Center-200, WindowSize-200, 10)
+			cardDeck[c] = newCard(cardTextures[c], PlayerCardXPos, PlayerCardYPos, 10)
 		case 14:
-			cardDeck[c] = newCard(cardTextures[c], Center-200, WindowSize-200, 11)
+			cardDeck[c] = newCard(cardTextures[c], PlayerCardXPos, PlayerCardYPos, 11)
 		default:
-			cardDeck[c] = newCard(cardTextures[c], Center-200, WindowSize-200, i)
+			cardDeck[c] = newCard(cardTextures[c], PlayerCardXPos, PlayerCardYPos, i)
 		}
 		//ha ha ha no, this is not a programming pun. c refers to card count therefore c++
 		c++
@@ -138,6 +142,7 @@ func loadCardTexture(typeOfCard string, c int, cardTextures [TotalDeck]rl.Textur
 	return cardTextures, cardDeck, c
 }
 
+// this grabs user's input. Keep in mind that the scheduler is set off here
 func getInput(player1, dealer *Player, cardDeck [TotalDeck]*Card, yourGame *GameState) {
 	if yourGame.IsOver == false && yourGame.JustStarted == false && yourGame.TurnIsNow {
 		if rl.IsKeyPressed(rl.KeyX) {
@@ -145,11 +150,24 @@ func getInput(player1, dealer *Player, cardDeck [TotalDeck]*Card, yourGame *Game
 			if player1.Score > Blackjack {
 				// Player busted!
 				yourGame.TurnIsNow = false
+				yourGame.RoundIsOver = true
+				yourGame.Lives--
 				yourGame.Scheduler = time.Now()
 			}
 		}
 		if rl.IsKeyPressed(rl.KeyZ) {
 			stay(player1, dealer, cardDeck, yourGame)
+		}
+	} else if yourGame.IsOver {
+		if rl.IsKeyPressed(rl.KeyA) {
+			yourGame.IsOver = false
+			yourGame.Lives = 3
+			yourGame.JustStarted = true
+			yourGame.RoundIsOver = false
+			yourGame.TurnIsNow = true
+			player1.Score = 0
+			dealer.Score = 0
+			resetRound(player1, dealer, yourGame)
 		}
 	}
 }
@@ -182,18 +200,10 @@ func hit(player *Player, cardDeck [TotalDeck]*Card) {
 
 func stay(player1, dealer *Player, cardDeck [TotalDeck]*Card, yourGame *GameState) {
 	yourGame.TurnIsNow = false
-	//dealer AI
-	for i := 0; i < MaxHand; i++ {
-		if dealer.Score < 17 {
-			hit(dealer, cardDeck)
-		} else {
-			break
-		}
-	}
+	yourGame.DealerGettingCards = true
+	yourGame.LastCardTime = time.Now()
 	calculateScore(player1)
 	calculateScore(dealer)
-	checkWinConditions(player1, dealer, yourGame)
-	yourGame.RoundIsOver = true
 }
 
 func update(cardDeck [TotalDeck]*Card, player1, dealer *Player, yourGame *GameState) {
@@ -206,6 +216,8 @@ func update(cardDeck [TotalDeck]*Card, player1, dealer *Player, yourGame *GameSt
 			if cardDeck[TotalDeck-10].IsDiscarded == true {
 				for i := range TotalDeck {
 					cardDeck[i].IsDiscarded = false
+					cardDeck[i].X = PlayerCardXPos
+					cardDeck[i].Y = PlayerCardYPos
 				}
 			}
 			//giving first card and second card
@@ -220,13 +232,23 @@ func update(cardDeck [TotalDeck]*Card, player1, dealer *Player, yourGame *GameSt
 			yourGame.JustStarted = false
 			yourGame.TurnIsNow = true
 		}
-		if player1.Score > Blackjack && yourGame.RoundIsOver == false {
-			yourGame.Lives -= 1
-			yourGame.RoundIsOver = true
+		if yourGame.DealerGettingCards {
+			if time.Since(yourGame.LastCardTime) > TimeToPassOutCard {
+				if dealer.Score < 17 {
+					hit(dealer, cardDeck)
+					yourGame.LastCardTime = time.Now()
+				} else {
+					yourGame.DealerGettingCards = false
+					checkWinConditions(player1, dealer, yourGame)
+					yourGame.RoundIsOver = true
+				}
+			}
 		}
-
+		//remember: the checking of win conditions happen in checkWinConditions while
+		//losing conidtions is checked in that and getInput
 		if yourGame.Lives <= 0 {
 			yourGame.IsOver = true
+			yourGame.RoundIsOver = false
 		}
 	}
 }
@@ -259,7 +281,7 @@ func checkWinConditions(player1, dealer *Player, yourGame *GameState) {
 	yourGame.Scheduler = startTimeNow
 }
 
-func draw(background, backOfCard rl.Texture2D, player1, dealer *Player, yourGame *GameState) {
+func draw(background, backOfCard, heart rl.Texture2D, player1, dealer *Player, yourGame *GameState) {
 	rl.BeginDrawing()
 
 	rl.ClearBackground(rl.RayWhite)
@@ -267,6 +289,8 @@ func draw(background, backOfCard rl.Texture2D, player1, dealer *Player, yourGame
 	rl.DrawTexture(background, 0, 0, rl.White)
 	if yourGame.IsOver {
 		rl.DrawText("Game is over", 190, 200, 20, rl.Red)
+		rl.DrawText("Press 'A' to reset", 190, 250, 20, rl.Red)
+
 	} else {
 		offset := int32(0)
 		for i := range MaxHand {
@@ -279,7 +303,7 @@ func draw(background, backOfCard rl.Texture2D, player1, dealer *Player, yourGame
 				}
 			}
 		}
-		rl.DrawText("Score: "+strconv.Itoa(player1.Score), 10, WindowSize-50, 20, rl.RayWhite)
+		rl.DrawText("Score: "+strconv.Itoa(player1.Score), 10, WindowSize-75, 25, rl.RayWhite)
 		offset = 0
 		isFirst := true
 		for i := range MaxHand {
@@ -287,7 +311,7 @@ func draw(background, backOfCard rl.Texture2D, player1, dealer *Player, yourGame
 				break
 			} else {
 				if dealer.Hand[i] != nil && dealer.Hand[i].ToShow == true {
-					if isFirst {
+					if isFirst && yourGame.RoundIsOver == false {
 						rl.DrawTexture(backOfCard, int32(dealer.Hand[i].X), int32(dealer.Hand[i].Y), rl.White)
 						offset = offset + 40
 						isFirst = false
@@ -302,9 +326,11 @@ func draw(background, backOfCard rl.Texture2D, player1, dealer *Player, yourGame
 			rl.DrawText(strconv.Itoa(dealer.Score), WindowSize-100, 5, 20, rl.RayWhite)
 			if time.Since(yourGame.Scheduler) < 3*time.Second {
 				if yourGame.YouWon {
-					rl.DrawText("You won!", 190, 200, 40, rl.Green)
+					rl.DrawText("You won!", 25, 180, 40, rl.Green)
+				} else if dealer.Score == player1.Score {
+					rl.DrawText("The house wins", 25, 180, 35, rl.Red)
 				} else {
-					rl.DrawText("You lost", 190, 200, 40, rl.Red)
+					rl.DrawText("You lost", 25, 180, 40, rl.Red)
 				}
 			} else {
 				yourGame.YouWon = false
@@ -314,7 +340,20 @@ func draw(background, backOfCard rl.Texture2D, player1, dealer *Player, yourGame
 			}
 		}
 	}
+	drawUi(heart, yourGame)
 	rl.EndDrawing()
+}
+
+func drawUi(heart rl.Texture2D, yourGame *GameState) {
+	rl.DrawTexture(heart, 60, WindowSize-30, rl.White)
+	rl.DrawText(strconv.Itoa(yourGame.Lives), 90, WindowSize-30, 40, rl.RayWhite)
+	//The variable yourGame.JustStarted is tracking when to hand out 2 cards but turns off immediatly
+	//to prevent the loop to go crazy... so we are using lives to detect when the begining of the game is
+	if yourGame.Lives == 3 {
+		rl.DrawText("Press 'X' to hit", 5, 5, 20, rl.RayWhite)
+		rl.DrawText("Press Z to stay", 5, 30, 20, rl.RayWhite)
+
+	}
 }
 
 func main() {
@@ -327,6 +366,8 @@ func main() {
 	defer rl.UnloadTexture(background)
 	backOfCard := rl.LoadTexture("images/Backface_Red.png")
 	defer rl.UnloadTexture(backOfCard)
+	heart := rl.LoadTexture("images/life-count.png")
+	defer rl.UnloadTexture(heart)
 	//importing cards
 	cardTextures, cardDeck := importCards()
 	for _, texture := range cardTextures {
@@ -343,7 +384,7 @@ func main() {
 			getInput(player1, dealer, cardDeck, yourGame)
 		}
 		update(cardDeck, player1, dealer, yourGame)
-		draw(background, backOfCard, player1, dealer, yourGame)
+		draw(background, backOfCard, heart, player1, dealer, yourGame)
 		frames++
 	}
 }
