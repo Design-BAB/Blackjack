@@ -1,5 +1,5 @@
 //Author: Design-BAB
-//Date: 12/31/2025
+//Date: 1/1/2025
 //Description: Time to play Blackjack! The goal is to reach 452 lines of code
 
 package main
@@ -51,6 +51,7 @@ func newPlayer(hand [MaxHand]*CardInHand, isDealer bool) *Player {
 func calculateScore(player *Player) {
 	theScore := 0
 	numberOfAces := 0
+	//Calculate score with ace being default 11
 	for i := range MaxHand {
 		if player.Hand[i] == nil {
 			break
@@ -61,6 +62,7 @@ func calculateScore(player *Player) {
 			}
 		}
 	}
+	//if they go over place jack, then we will have the ace go being valued 1
 	if numberOfAces > 0 {
 		for i := 0; i < numberOfAces; i++ {
 			if theScore > Blackjack {
@@ -93,6 +95,7 @@ func AddCardToHand(theCard *Card) *CardInHand {
 	return &CardInHand{Card: theCard}
 }
 
+// this function will run in main in order to import cards
 func importCards() ([TotalDeck]rl.Texture2D, [TotalDeck]*Card) {
 	var cardTextures [TotalDeck]rl.Texture2D
 	var cardDeck [TotalDeck]*Card
@@ -120,7 +123,7 @@ func loadCardTexture(typeOfCard string, c int, cardTextures [TotalDeck]rl.Textur
 		default:
 			cardTextures[c] = rl.LoadTexture("images/" + strconv.Itoa(i) + "_" + typeOfCard + ".png")
 		}
-		//second switch for the deck
+		//second switch for the deck struct
 		switch i {
 		case 11, 12, 13:
 			cardDeck[c] = newCard(cardTextures[c], Center-200, WindowSize-200, 10)
@@ -139,9 +142,14 @@ func getInput(player1, dealer *Player, cardDeck [TotalDeck]*Card, yourGame *Game
 	if yourGame.IsOver == false && yourGame.JustStarted == false && yourGame.TurnIsNow {
 		if rl.IsKeyPressed(rl.KeyX) {
 			hit(player1, cardDeck)
+			if player1.Score > Blackjack {
+				// Player busted!
+				yourGame.TurnIsNow = false
+				yourGame.Scheduler = time.Now()
+			}
 		}
 		if rl.IsKeyPressed(rl.KeyZ) {
-			stay(dealer, cardDeck, yourGame)
+			stay(player1, dealer, cardDeck, yourGame)
 		}
 	}
 }
@@ -161,6 +169,7 @@ func hit(player *Player, cardDeck [TotalDeck]*Card) {
 			player.Hand[newCardi] = AddCardToHand(cardDeck[i])
 			player.Hand[newCardi].ToShow = true
 			cardDeck[i].IsDiscarded = true
+			//change the position if it is the dealer's cards
 			if player.IsDealer {
 				player.Hand[newCardi].X = WindowSize - 5 - player.Hand[newCardi].Width
 				player.Hand[newCardi].Y = 75
@@ -171,8 +180,9 @@ func hit(player *Player, cardDeck [TotalDeck]*Card) {
 	calculateScore(player)
 }
 
-func stay(dealer *Player, cardDeck [TotalDeck]*Card, yourGame *GameState) {
+func stay(player1, dealer *Player, cardDeck [TotalDeck]*Card, yourGame *GameState) {
 	yourGame.TurnIsNow = false
+	//dealer AI
 	for i := 0; i < MaxHand; i++ {
 		if dealer.Score < 17 {
 			hit(dealer, cardDeck)
@@ -180,6 +190,9 @@ func stay(dealer *Player, cardDeck [TotalDeck]*Card, yourGame *GameState) {
 			break
 		}
 	}
+	calculateScore(player1)
+	calculateScore(dealer)
+	checkWinConditions(player1, dealer, yourGame)
 	yourGame.RoundIsOver = true
 }
 
@@ -189,6 +202,12 @@ func update(cardDeck [TotalDeck]*Card, player1, dealer *Player, yourGame *GameSt
 			rand.Shuffle(TotalDeck, func(i, j int) {
 				cardDeck[i], cardDeck[j] = cardDeck[j], cardDeck[i]
 			})
+			//gotta reset the deck if we run out of cards.
+			if cardDeck[TotalDeck-10].IsDiscarded == true {
+				for i := range TotalDeck {
+					cardDeck[i].IsDiscarded = false
+				}
+			}
 			//giving first card and second card
 			hit(player1, cardDeck)
 			hit(player1, cardDeck)
@@ -201,13 +220,11 @@ func update(cardDeck [TotalDeck]*Card, player1, dealer *Player, yourGame *GameSt
 			yourGame.JustStarted = false
 			yourGame.TurnIsNow = true
 		}
-		if player1.Score > Blackjack {
+		if player1.Score > Blackjack && yourGame.RoundIsOver == false {
 			yourGame.Lives -= 1
-			resetRound(player1, dealer, yourGame)
+			yourGame.RoundIsOver = true
 		}
-		if yourGame.TurnIsNow == false && yourGame.RoundIsOver {
-			checkWinConditions(player1, dealer, yourGame)
-		}
+
 		if yourGame.Lives <= 0 {
 			yourGame.IsOver = true
 		}
@@ -230,14 +247,14 @@ func resetRound(player1, dealer *Player, yourGame *GameState) {
 func checkWinConditions(player1, dealer *Player, yourGame *GameState) {
 	if player1.Score == Blackjack && dealer.Score != Blackjack {
 		yourGame.YouWon = true
-	} else if dealer.Score == Blackjack {
-		rl.DrawText("The house won.", 190, 200, 20, rl.Green)
 	} else if dealer.Score > Blackjack && player1.Score < Blackjack {
 		yourGame.YouWon = true
 	} else if dealer.Score < player1.Score && dealer.Score < Blackjack && player1.Score < Blackjack {
 		yourGame.YouWon = true
+	} else {
+		//if they didn't meet the win conditions, then it is safe to say they lost
+		yourGame.Lives--
 	}
-	resetRound(player1, dealer, yourGame)
 	startTimeNow := time.Now()
 	yourGame.Scheduler = startTimeNow
 }
@@ -293,6 +310,7 @@ func draw(background, backOfCard rl.Texture2D, player1, dealer *Player, yourGame
 				yourGame.YouWon = false
 				yourGame.RoundIsOver = false
 				yourGame.TurnIsNow = true
+				resetRound(player1, dealer, yourGame)
 			}
 		}
 	}
@@ -321,7 +339,9 @@ func main() {
 	dealer := newPlayer(herHand, true)
 	frames := 0
 	for !rl.WindowShouldClose() && frames < MaxFrames {
-		getInput(player1, dealer, cardDeck, yourGame)
+		if yourGame.RoundIsOver == false {
+			getInput(player1, dealer, cardDeck, yourGame)
+		}
 		update(cardDeck, player1, dealer, yourGame)
 		draw(background, backOfCard, player1, dealer, yourGame)
 		frames++
