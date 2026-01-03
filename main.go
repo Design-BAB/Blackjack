@@ -189,8 +189,8 @@ func hit(player *Player, cardDeck [TotalDeck]*Card) {
 			cardDeck[i].IsDiscarded = true
 			//change the position if it is the dealer's cards
 			if player.IsDealer {
-				player.Hand[newCardi].X = WindowSize - 5 - player.Hand[newCardi].Width
-				player.Hand[newCardi].Y = 75
+				player.Hand[newCardi].X = WindowSize - 20 - player.Hand[newCardi].Width
+				player.Hand[newCardi].Y = 45
 			}
 			break
 		}
@@ -213,7 +213,7 @@ func update(cardDeck [TotalDeck]*Card, player1, dealer *Player, yourGame *GameSt
 				cardDeck[i], cardDeck[j] = cardDeck[j], cardDeck[i]
 			})
 			//gotta reset the deck if we run out of cards.
-			if cardDeck[TotalDeck-10].IsDiscarded == true {
+			if cardDeck[TotalDeck-MaxHand].IsDiscarded == true {
 				for i := range TotalDeck {
 					cardDeck[i].IsDiscarded = false
 					cardDeck[i].X = PlayerCardXPos
@@ -248,7 +248,7 @@ func update(cardDeck [TotalDeck]*Card, player1, dealer *Player, yourGame *GameSt
 		//losing conidtions is checked in that and getInput
 		if yourGame.Lives <= 0 {
 			yourGame.IsOver = true
-			yourGame.RoundIsOver = false
+			//yourGame.RoundIsOver = false
 		}
 	}
 }
@@ -322,26 +322,31 @@ func draw(background, backOfCard, heart rl.Texture2D, player1, dealer *Player, y
 				}
 			}
 		}
-		if yourGame.RoundIsOver {
-			rl.DrawText(strconv.Itoa(dealer.Score), WindowSize-100, 5, 20, rl.RayWhite)
-			if time.Since(yourGame.Scheduler) < 3*time.Second {
-				if yourGame.YouWon {
-					rl.DrawText("You won!", 25, 180, 40, rl.Green)
-				} else if dealer.Score == player1.Score {
-					rl.DrawText("The house wins", 25, 180, 35, rl.Red)
-				} else {
-					rl.DrawText("You lost", 25, 180, 40, rl.Red)
-				}
-			} else {
-				yourGame.YouWon = false
-				yourGame.RoundIsOver = false
-				yourGame.TurnIsNow = true
-				resetRound(player1, dealer, yourGame)
-			}
-		}
 	}
+
+	drawResults(player1, dealer, yourGame)
 	drawUi(heart, yourGame)
 	rl.EndDrawing()
+}
+
+func drawResults(player1, dealer *Player, yourGame *GameState) {
+	if yourGame.RoundIsOver {
+		rl.DrawText(strconv.Itoa(dealer.Score), WindowSize-100, 5, 20, rl.RayWhite)
+		if time.Since(yourGame.Scheduler) < 3*time.Second {
+			if yourGame.YouWon {
+				rl.DrawText("You won!", 25, 180, 40, rl.Green)
+			} else if dealer.Score == player1.Score {
+				rl.DrawText("The house wins", 25, 180, 35, rl.Red)
+			} else {
+				rl.DrawText("You lost", 25, 180, 40, rl.Red)
+			}
+		} else {
+			yourGame.YouWon = false
+			yourGame.RoundIsOver = false
+			yourGame.TurnIsNow = true
+			resetRound(player1, dealer, yourGame)
+		}
+	}
 }
 
 func drawUi(heart rl.Texture2D, yourGame *GameState) {
